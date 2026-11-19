@@ -1,0 +1,50 @@
+name: Release MacPorts Repository
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'devel/**'
+      - '.github/workflows/release-ports.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MacPorts
+        uses: macports/setup-macports@v1
+
+      - name: Generate PortIndex and lint
+        run: |
+          portindex
+          port lint --nitpick ./devel/ngraph-gtk || true
+
+      - name: Package ports.tar.gz
+        run: |
+          tar -czf ports.tar.gz devel PortIndex PortIndex.quick
+
+      - name: Upload ports.tar.gz to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: MacPorts Repository (Latest)
+          body: |
+            Automated MacPorts repository archive containing `Portfile` and pre-generated `PortIndex`.
+
+            ### Usage
+            Add the following line above `rsync://...` in `/opt/local/etc/macports/sources.conf`:
+            ```text
+            https://github.com\${{ github.repository }}/releases/download/latest/ports.tar.gz
+            ```
+            Then run `sudo port selfupdate` and `sudo port install ngraph-gtk-devel`.
+          files: ports.tar.gz

@@ -1,0 +1,196 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+PortSystem          1.0
+PortGroup           github 1.0
+
+name                ngraph-gtk
+categories          devel
+license             GPL-2+
+maintainers         htrb
+
+description         Scientific 2-D graph.
+long_description    Ngraph is the program to create scientific 2-dimensional graphs for researchers and engineers.
+
+subport ngraph-gtk-devel {
+    conflicts       ngraph-gtk
+}
+
+if {${subport} eq ${name}} {
+    conflicts       ngraph-gtk-devel
+    github.setup    htrb ngraph-gtk 6.10.00 v
+    revision        0
+    github.tarball_from releases
+
+    checksums       sha256  e791c7e2fd5b8f1c833c8b03018e6a7009f08537bf9b6b9eee7d6015f92874f7 \
+                    rmd160  2763d642d4609913efc0ce3aa0e7344642f45b32 \
+                    size    3808358
+
+} else {
+    # 開発版（ngraph-gtk-devel: HEAD）の設定
+    github.setup    htrb ngraph-gtk master
+    version         9999
+    revision        0
+    fetch.type      git
+    git.url         https://github.com/htrb/ngraph-gtk.git
+    git.branch      master
+}
+
+
+
+# github.tarball_from archive
+#checksums           rmd160  0000000000000000000000000000000000000000 \
+#                    sha256  0000000000000000000000000000000000000000000000000000000000000000 \
+#                    size    12345
+
+# .app バンドルの設定
+#app.create          yes
+#app.name            Ngraph-GTK
+#app.executable      ngraph
+#app.icon            ${worksrcpath}/icons/scalable/apps/ngraph.svg
+
+depends_build-append    port:pkgconfig \
+                        port:gettext \
+			port:gmake \
+                        port:librsvg
+
+depends_lib-append      port:gtksourceview5 \
+                        port:gtk4 \
+                        port:readline \
+                        port:gsl \
+                        port:gettext-runtime \
+			port:adwaita-icon-theme
+
+use_autoreconf		yes
+autoreconf.args		-fi
+
+build.cmd		${prefix}/bin/gmake
+
+# configure.args-append   --disable-silent-rules
+configure.ldflags-append  -lintl
+post-build {
+	system -W ${worksrcpath}/po "${build.cmd} ja.gmo"
+}
+post-destroot {
+    set appdir "${destroot}${applications_dir}/Ngraph-gtk.app"
+    set macosdir "${appdir}/Contents/MacOS"
+    set resdir "${appdir}/Contents/Resources"
+    xinstall -d "${macosdir}" "${resdir}"
+
+    # 1. Objective-C ラッパーのビルド（前回と同じ）
+    set src "${workpath}/launcher.m"
+    set fp [open $src w]
+    puts $fp {#import <Cocoa/Cocoa.h>}
+    puts $fp {#include <errno.h>}
+    puts $fp {#include <string.h>}
+    puts $fp {@interface AppDelegate : NSObject <NSApplicationDelegate>}
+    puts $fp {@property (strong) NSMutableArray<NSString *> *files;}
+    puts $fp {@end}
+    puts $fp {@implementation AppDelegate}
+    puts $fp {- (instancetype)init { if (self = [super init]) _files = [NSMutableArray new]; return self; }}
+    puts $fp {- (void)application:(NSApplication *)sender openFiles:(NSArray<NSString *> *)filenames { [self.files addObjectsFromArray:filenames]; }}
+    puts $fp {- (void)applicationDidFinishLaunching:(NSNotification *)notification {
+        puts $fp "setenv(\"XDG_DATA_DIRS\", \"${prefix}/share:/usr/local/share:/usr/share\", 1);"
+        puts $fp "setenv(\"PATH\", \"${prefix}/bin:${prefix}/sbin:/usr/bin:/bin:/usr/sbin:/sbin\", 1);"
+        puts $fp "NSMutableArray *args = \[NSMutableArray arrayWithObject:@\"${prefix}/bin/ngraph\"\];"
+        [args addObjectsFromArray:self.files];
+        const char **argv = calloc(args.count + 1, sizeof(char *));
+        for (NSUInteger i = 0; i < args.count; i++) argv[i] = [args[i] UTF8String];
+        if (fork() == 0) {
+            execv(argv[0], (char *const *)argv);
+            FILE *f = fopen("/tmp/ngraph-launcher.log", "w");
+            if (f) { fprintf(f, "execv failed: %s (%s)\n", argv[0], strerror(errno)); fclose(f); }
+            _exit(1);
+        }
+        [NSApp terminate:nil];
+    }}
+    puts $fp {@end}
+    puts $fp {int main(int argc, const char * argv[]) {
+        @autoreleasepool {
+            NSApplication *app = [NSApplication sharedApplication];
+            AppDelegate *delegate = [AppDelegate new];
+            app.delegate = delegate;
+            [app run];
+        }
+        return 0;
+    }}
+    close $fp
+
+    system "${configure.cc} -fobjc-arc -framework Cocoa \"${src}\" -o \"${macosdir}/Ngraph-gtk\""
+
+    # 2. SVG アイコンを .icns に変換して Resources に配置
+    set svg_icon "${worksrcpath}/icons/scalable/apps/ngraph.svg"
+    set iconset "${workpath}/Ngraph-gtk.iconset"
+    xinstall -d "${iconset}"
+    foreach size {16 32 128 256 512} {
+        set double [expr {$size * 2}]
+        system "${prefix}/bin/rsvg-convert -w ${size} -h ${size} \"${svg_icon}\" -o \"${iconset}/icon_${size}x${size}.png\""
+        system "${prefix}/bin/rsvg-convert -w ${double} -h ${double} \"${svg_icon}\" -o \"${iconset}/icon_${size}x${size}@2x.png\""
+    }
+    system "/usr/bin/iconutil -c icns \"${iconset}\" -o \"${resdir}/Ngraph-gtk.icns\""
+
+    # 3. Info.plist を作成（ドキュメントアイコンと UTI の定義を追加）
+    set plist "${appdir}/Contents/Info.plist"
+    set pfp [open $plist w]
+    puts $pfp {<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://apple.com">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>Ngraph-gtk</string>
+    <key>CFBundleIconFile</key>
+    <string>Ngraph-gtk</string>
+    <key>CFBundleIdentifier</key>
+    <string>org.macports.ngraph-gtk</string>
+    <key>CFBundleName</key>
+    <string>Ngraph-gtk</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>ngp</string>
+            </array>
+            <key>CFBundleTypeIconFile</key>
+            <string>Ngraph-gtk</string>
+            <key>CFBundleTypeName</key>
+            <string>Ngraph Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>org.macports.ngraph-gtk.ngp</string>
+            </array>
+        </dict>
+    </array>
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.data</string>
+                <string>public.text</string>
+            </array>
+            <key>UTTypeDescription</key>
+            <string>Ngraph Document</string>
+            <key>UTTypeIconFile</key>
+            <string>Ngraph-gtk</string>
+            <key>UTTypeIdentifier</key>
+            <string>org.macports.ngraph-gtk.ngp</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>ngp</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>}
+    close $pfp
+}
+
