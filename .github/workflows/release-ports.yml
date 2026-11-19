@@ -26,19 +26,25 @@ jobs:
           if [ ! -x /opt/local/bin/portindex ]; then
             MACOS_VER=$(sw_vers -productVersion | cut -d. -f1)
             case "$MACOS_VER" in
-              15) MACOS_NAME="15-Sequoia" ;;
-              14) MACOS_NAME="14-Sonoma" ;;
-              13) MACOS_NAME="13-Ventura" ;;
-              *)  MACOS_NAME="15-Sequoia" ;;
+              15) MACOS_PATTERNS="15-Sequoia|Sequoia|-15\." ;;
+              14) MACOS_PATTERNS="14-Sonoma|Sonoma|-14\." ;;
+              13) MACOS_PATTERNS="13-Ventura|Ventura|-13\." ;;
+              *)  MACOS_PATTERNS="15-Sequoia|Sequoia|-15\." ;;
             esac
-            PKG_URL=$(curl -sL https://api.github.com/repos/macports/macports-base/releases/latest \
-              | grep -o "https://[^\"]*${MACOS_NAME}[^\"]*\.pkg" \
-              | head -n 1)
+            PKG_URL=$(curl -fsSL https://api.github.com/repos/macports/macports-base/releases \
+              | grep -Eo 'https://[^"[:space:]]+\.pkg' \
+              | grep -E "$MACOS_PATTERNS" \
+              | head -n 1 || true)
+
             if [ -z "$PKG_URL" ]; then
-              echo "Failed to resolve MacPorts .pkg URL for $MACOS_NAME" >&2
+              echo "Available .pkg URLs from latest releases:" >&2
+              curl -fsSL https://api.github.com/repos/macports/macports-base/releases \
+                | grep -Eo 'https://[^"[:space:]]+\.pkg' \
+                | head -n 20 >&2 || true
+              echo "Failed to resolve MacPorts .pkg URL for macOS $MACOS_VER ($MACOS_PATTERNS)" >&2
               exit 1
             fi
-            curl -L -o /tmp/macports.pkg "$PKG_URL"
+            curl -fsSL -o /tmp/macports.pkg "$PKG_URL"
             sudo installer -pkg /tmp/macports.pkg -target /
           fi
           echo "/opt/local/bin" >> "$GITHUB_PATH"
