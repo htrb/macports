@@ -21,8 +21,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup MacPorts
-        uses: macports/setup-macports@v1
+      - name: Add MacPorts to PATH
+        run: echo "/opt/local/bin" >> \$GITHUB_PATH
 
       - name: Generate PortIndex and lint
         run: |
