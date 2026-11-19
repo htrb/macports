@@ -2,8 +2,6 @@
 
 PortSystem          1.0
 PortGroup           github 1.0
-PortSystem          1.0
-PortGroup           github 1.0
 
 name                ngraph-gtk
 categories          devel
@@ -78,43 +76,55 @@ post-destroot {
     set resdir "${appdir}/Contents/Resources"
     xinstall -d "${macosdir}" "${resdir}"
 
-    # 1. Objective-C ラッパーのビルド（前回と同じ）
+    # 1. Objective-C ラッパーのビルド
     set src "${workpath}/launcher.m"
+    set launcher_code {
+        #import <Cocoa/Cocoa.h>
+        #include <errno.h>
+        #include <string.h>
+
+        @interface AppDelegate : NSObject <NSApplicationDelegate>
+        @property (strong) NSMutableArray<NSString *> *files;
+        @end
+
+        @implementation AppDelegate
+        - (instancetype)init {
+            if (self = [super init]) _files = [NSMutableArray new];
+            return self;
+        }
+        - (void)application:(NSApplication *)sender openFiles:(NSArray<NSString *> *)filenames {
+            [self.files addObjectsFromArray:filenames];
+        }
+        - (void)applicationDidFinishLaunching:(NSNotification *)notification {
+            setenv("XDG_DATA_DIRS", "${prefix}/share:/usr/local/share:/usr/share", 1);
+            setenv("PATH", "${prefix}/bin:${prefix}/sbin:/usr/bin:/bin:/usr/sbin:/sbin", 1);
+            NSMutableArray *args = [NSMutableArray arrayWithObject:@"${prefix}/bin/ngraph"];
+            [args addObjectsFromArray:self.files];
+            const char **argv = calloc(args.count + 1, sizeof(char *));
+            for (NSUInteger i = 0; i < args.count; i++) argv[i] = [args[i] UTF8String];
+            if (fork() == 0) {
+                execv(argv[0], (char *const *)argv);
+                FILE *f = fopen("/tmp/ngraph-launcher.log", "w");
+                if (f) { fprintf(f, "execv failed: %s (%s)\n", argv[0], strerror(errno)); fclose(f); }
+                _exit(1);
+            }
+            [NSApp terminate:nil];
+        }
+        @end
+
+        int main(int argc, const char * argv[]) {
+            @autoreleasepool {
+                NSApplication *app = [NSApplication sharedApplication];
+                AppDelegate *delegate = [AppDelegate new];
+                app.delegate = delegate;
+                [app run];
+            }
+            return 0;
+        }
+    }
+    set launcher_code [string map [list \${prefix} ${prefix}] $launcher_code]
     set fp [open $src w]
-    puts $fp {#import <Cocoa/Cocoa.h>}
-    puts $fp {#include <errno.h>}
-    puts $fp {#include <string.h>}
-    puts $fp {@interface AppDelegate : NSObject <NSApplicationDelegate>}
-    puts $fp {@property (strong) NSMutableArray<NSString *> *files;}
-    puts $fp {@end}
-    puts $fp {@implementation AppDelegate}
-    puts $fp {- (instancetype)init { if (self = [super init]) _files = [NSMutableArray new]; return self; }}
-    puts $fp {- (void)application:(NSApplication *)sender openFiles:(NSArray<NSString *> *)filenames { [self.files addObjectsFromArray:filenames]; }}
-    puts $fp {- (void)applicationDidFinishLaunching:(NSNotification *)notification {
-        puts $fp "setenv(\"XDG_DATA_DIRS\", \"${prefix}/share:/usr/local/share:/usr/share\", 1);"
-        puts $fp "setenv(\"PATH\", \"${prefix}/bin:${prefix}/sbin:/usr/bin:/bin:/usr/sbin:/sbin\", 1);"
-        puts $fp "NSMutableArray *args = \[NSMutableArray arrayWithObject:@\"${prefix}/bin/ngraph\"\];"
-        [args addObjectsFromArray:self.files];
-        const char **argv = calloc(args.count + 1, sizeof(char *));
-        for (NSUInteger i = 0; i < args.count; i++) argv[i] = [args[i] UTF8String];
-        if (fork() == 0) {
-            execv(argv[0], (char *const *)argv);
-            FILE *f = fopen("/tmp/ngraph-launcher.log", "w");
-            if (f) { fprintf(f, "execv failed: %s (%s)\n", argv[0], strerror(errno)); fclose(f); }
-            _exit(1);
-        }
-        [NSApp terminate:nil];
-    }}
-    puts $fp {@end}
-    puts $fp {int main(int argc, const char * argv[]) {
-        @autoreleasepool {
-            NSApplication *app = [NSApplication sharedApplication];
-            AppDelegate *delegate = [AppDelegate new];
-            app.delegate = delegate;
-            [app run];
-        }
-        return 0;
-    }}
+    puts $fp $launcher_code
     close $fp
 
     system "${configure.cc} -fobjc-arc -framework Cocoa \"${src}\" -o \"${macosdir}/Ngraph-gtk\""
