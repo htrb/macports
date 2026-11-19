@@ -21,8 +21,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Add MacPorts to PATH
-        run: echo "/opt/local/bin" >> \$GITHUB_PATH
+      - name: Install MacPorts
+        run: |
+          if [ ! -x /opt/local/bin/portindex ]; then
+            MACOS_VER=\$(sw_vers -productVersion | cut -d. -f1)
+            case "\$MACOS_VER" in
+              15) MACOS_NAME="15-Sequoia" ;;
+              14) MACOS_NAME="14-Sonoma" ;;
+              13) MACOS_NAME="13-Ventura" ;;
+              *)  MACOS_NAME="15-Sequoia" ;;
+            esac
+            PKG_URL=\$(curl -s https://github.com | grep "browser_download_url.*\${MACOS_NAME}\.pkg\"" | cut -d '"' -f 4)
+            curl -L -o /tmp/macports.pkg "\$PKG_URL"
+            sudo installer -pkg /tmp/macports.pkg -target /
+          fi
+          echo "/opt/local/bin" >> \$GITHUB_PATH
 
       - name: Generate PortIndex and lint
         run: |
