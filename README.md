@@ -4,8 +4,11 @@
 
 Add the following line above `rsync://...` in `/opt/local/etc/macports/sources.conf`:
 
-https://github.com/htrb/macports/releases/download/latest/ports.tar.gz   
+https://github.com/htrb/macports/releases/download/latest/ports.tar.gz
 
 ## Install
 
-sudo port selfupdate sudo port install ngraph-gtk-devel   
+```bash
+sudo port selfupdate
+sudo port install ngraph-gtk-devel
+```
