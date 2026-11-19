@@ -24,18 +24,24 @@ jobs:
       - name: Install MacPorts
         run: |
           if [ ! -x /opt/local/bin/portindex ]; then
-            MACOS_VER=\$(sw_vers -productVersion | cut -d. -f1)
-            case "\$MACOS_VER" in
+            MACOS_VER=$(sw_vers -productVersion | cut -d. -f1)
+            case "$MACOS_VER" in
               15) MACOS_NAME="15-Sequoia" ;;
               14) MACOS_NAME="14-Sonoma" ;;
               13) MACOS_NAME="13-Ventura" ;;
               *)  MACOS_NAME="15-Sequoia" ;;
             esac
-            PKG_URL=\$(curl -s https://github.com | grep "browser_download_url.*\${MACOS_NAME}\.pkg\"" | cut -d '"' -f 4)
-            curl -L -o /tmp/macports.pkg "\$PKG_URL"
+            PKG_URL=$(curl -sL https://api.github.com/repos/macports/macports-base/releases/latest \
+              | grep -o "https://[^\"]*${MACOS_NAME}[^\"]*\.pkg" \
+              | head -n 1)
+            if [ -z "$PKG_URL" ]; then
+              echo "Failed to resolve MacPorts .pkg URL for $MACOS_NAME" >&2
+              exit 1
+            fi
+            curl -L -o /tmp/macports.pkg "$PKG_URL"
             sudo installer -pkg /tmp/macports.pkg -target /
           fi
-          echo "/opt/local/bin" >> \$GITHUB_PATH
+          echo "/opt/local/bin" >> "$GITHUB_PATH"
 
       - name: Generate PortIndex and lint
         run: |
@@ -57,7 +63,7 @@ jobs:
             ### Usage
             Add the following line above `rsync://...` in `/opt/local/etc/macports/sources.conf`:
             ```text
-            https://github.com\${{ github.repository }}/releases/download/latest/ports.tar.gz
+            [https://github.com/htrb/macports/releases/download/latest/ports.tar.gz](https://github.com/htrb/macports/releases/download/latest/ports.tar.gz)
             ```
             Then run `sudo port selfupdate` and `sudo port install ngraph-gtk-devel`.
           files: ports.tar.gz
