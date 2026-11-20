@@ -1,4 +1,4 @@
-name: Release MacPorts Repository
+name: Update PortIndex
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  update-portindex:
     runs-on: macos-latest
 
     steps:
@@ -75,18 +75,12 @@ jobs:
         run: |
           tar -czf ports.tar.gz devel PortIndex PortIndex.quick
 
-      - name: Upload ports.tar.gz to GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: latest
-          name: MacPorts Repository (Latest)
-          body: |
-            Automated MacPorts repository archive containing `Portfile` and pre-generated `PortIndex`.
-
-            ### Usage
-            Add the following line above `rsync://...` in `/opt/local/etc/macports/sources.conf`:
-            ```text
-            [https://github.com/htrb/macports/releases/download/latest/ports.tar.gz](https://github.com/htrb/macports/releases/download/latest/ports.tar.gz)
-            ```
-            Then run `sudo port selfupdate` and `sudo port install ngraph-gtk-devel`.
-          files: ports.tar.gz
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PortIndex PortIndex.quick
+          if ! git diff --staged --quiet; then
+            git commit -m "Update PortIndex [skip ci]"
+            git push
+          fi
