@@ -27,14 +27,12 @@ Open `/opt/local/etc/macports/sources.conf` with root privileges and add the loc
 sudo vi /opt/local/etc/macports/sources.conf
 ```
 
-**Example (replace `<your-macos-username>` with your actual macOS username):**
+**Example:**
 
 ```text
 file:///opt/local/share/macports-local/ngraph
 rsync://rsync.macports.org/macports/release/tarballs/ports.tar [default]
 ```
-
-> **Note:** MacPorts does not expand `~` (tilde) in `sources.conf`. Make sure to specify the full path starting with `/Users/<your-macos-username>/...`.
 
 ### 3. Sync Port Index
 
