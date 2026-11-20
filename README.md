@@ -13,10 +13,10 @@ To make the ports in this repository available, add this repository to your MacP
 
 ### 1. Clone the Repository
 
-Clone this repository to a local directory of your choice (e.g., `~/.local/share/macports`):
+Clone this repository to a local directory of your choice (e.g., `/opt/local/share/macports-local/ngraph`):
 
 ```bash
-git clone https://github.com/htrb/macports.git ~/.local/share/macports
+sudo git clone https://github.com/htrb/macports.git /opt/local/share/macports-local/ngraph
 ```
 
 ### 2. Register in `sources.conf`
@@ -30,7 +30,7 @@ sudo vi /opt/local/etc/macports/sources.conf
 **Example (replace `<your-macos-username>` with your actual macOS username):**
 
 ```text
-file:///Users/<your-macos-username>/.local/share/macports
+file:///opt/local/share/macports-local/ngraph
 rsync://rsync.macports.org/macports/release/tarballs/ports.tar [default]
 ```
 
@@ -55,7 +55,7 @@ sudo port install ngraph-gtk-devel
 To update to the latest version, pull the latest changes from this repository, sync the index, and upgrade the port:
 
 ```bash
-git -C ~/.local/share/macports pull
+sudo git -C /opt/local/share/macports-local/ngraph pull
 sudo port sync
 sudo port upgrade ngraph-gtk-devel
 ```
