@@ -71,10 +71,6 @@ jobs:
           portindex
           port lint --nitpick ./devel/ngraph-gtk || true
 
-      - name: Package ports.tar.gz
-        run: |
-          tar -czf ports.tar.gz devel PortIndex PortIndex.quick
-
       - name: Commit and push changes
         run: |
           git config user.name "github-actions[bot]"
