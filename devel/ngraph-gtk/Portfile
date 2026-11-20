@@ -2,6 +2,7 @@
 
 PortSystem          1.0
 PortGroup           github 1.0
+PortGroup           app 1.0
 
 name                ngraph-gtk
 categories          devel
@@ -35,22 +36,9 @@ if {${subport} eq ${name}} {
     git.branch      master
 }
 
-
-
-# github.tarball_from archive
-#checksums           rmd160  0000000000000000000000000000000000000000 \
-#                    sha256  0000000000000000000000000000000000000000000000000000000000000000 \
-#                    size    12345
-
-# .app バンドルの設定
-#app.create          yes
-#app.name            Ngraph-GTK
-#app.executable      ngraph
-#app.icon            ${worksrcpath}/icons/scalable/apps/ngraph.svg
-
 depends_build-append    port:pkgconfig \
                         port:gettext \
-			port:gmake \
+                        port:gmake \
                         port:librsvg
 
 depends_lib-append      port:gtksourceview5 \
@@ -58,114 +46,45 @@ depends_lib-append      port:gtksourceview5 \
                         port:readline \
                         port:gsl \
                         port:gettext-runtime \
-			port:adwaita-icon-theme
+                        port:adwaita-icon-theme
 
-use_autoreconf		yes
-autoreconf.args		-fi
+use_autoreconf          yes
+autoreconf.args         -fi
 
-build.cmd		${prefix}/bin/gmake
+build.cmd               ${prefix}/bin/gmake
 
 # configure.args-append   --disable-silent-rules
 configure.ldflags-append  -lintl
 post-build {
-	system -W ${worksrcpath}/po "${build.cmd} ja.gmo"
+    system -W ${worksrcpath}/po "${build.cmd} ja.gmo"
 }
+
+app.create          yes
+app.name            Ngraph-GTK
+app.executable      ngraph
+app.icon            ${worksrcpath}/icons/scalable/apps/ngraph.svg
+
 post-destroot {
-    set appdir "${destroot}${applications_dir}/Ngraph-gtk.app"
-    set macosdir "${appdir}/Contents/MacOS"
-    set resdir "${appdir}/Contents/Resources"
-    xinstall -d "${macosdir}" "${resdir}"
+    set app_dir "${destroot}${applications_dir}/Ngraph-GTK.app"
+    set contents_dir "${app_dir}/Contents"
+    xinstall -d -m 0755 "${contents_dir}"
 
-    # 1. Objective-C ラッパーのビルド
-    set src "${workpath}/launcher.m"
-    set launcher_code {
-        #import <Cocoa/Cocoa.h>
-        #include <errno.h>
-        #include <string.h>
-
-        @interface AppDelegate : NSObject <NSApplicationDelegate>
-        @property (strong) NSMutableArray<NSString *> *files;
-        @end
-
-        @implementation AppDelegate
-        - (instancetype)init {
-            if (self = [super init]) _files = [NSMutableArray new];
-            return self;
-        }
-        - (void)application:(NSApplication *)sender openFiles:(NSArray<NSString *> *)filenames {
-            [self.files addObjectsFromArray:filenames];
-        }
-        - (void)applicationDidFinishLaunching:(NSNotification *)notification {
-            setenv("XDG_DATA_DIRS", "${prefix}/share:/usr/local/share:/usr/share", 1);
-            setenv("PATH", "${prefix}/bin:${prefix}/sbin:/usr/bin:/bin:/usr/sbin:/sbin", 1);
-            NSMutableArray *args = [NSMutableArray arrayWithObject:@"${prefix}/bin/ngraph"];
-            [args addObjectsFromArray:self.files];
-            const char **argv = calloc(args.count + 1, sizeof(char *));
-            for (NSUInteger i = 0; i < args.count; i++) argv[i] = [args[i] UTF8String];
-            if (fork() == 0) {
-                execv(argv[0], (char *const *)argv);
-                FILE *f = fopen("/tmp/ngraph-launcher.log", "w");
-                if (f) { fprintf(f, "execv failed: %s (%s)\n", argv[0], strerror(errno)); fclose(f); }
-                _exit(1);
-            }
-            [NSApp terminate:nil];
-        }
-        @end
-
-        int main(int argc, const char * argv[]) {
-            @autoreleasepool {
-                NSApplication *app = [NSApplication sharedApplication];
-                AppDelegate *delegate = [AppDelegate new];
-                app.delegate = delegate;
-                [app run];
-            }
-            return 0;
-        }
-    }
-    set launcher_code [string map [list \${prefix} ${prefix}] $launcher_code]
-    set fp [open $src w]
-    puts $fp $launcher_code
-    close $fp
-
-    system "${configure.cc} -fobjc-arc -framework Cocoa \"${src}\" -o \"${macosdir}/Ngraph-gtk\""
-
-    # 2. SVG アイコンを .icns に変換して Resources に配置
-    set svg_icon "${worksrcpath}/icons/scalable/apps/ngraph.svg"
-    set iconset "${workpath}/Ngraph-gtk.iconset"
-    xinstall -d "${iconset}"
-    foreach size {16 32 128 256 512} {
-        set double [expr {$size * 2}]
-        system "${prefix}/bin/rsvg-convert -w ${size} -h ${size} \"${svg_icon}\" -o \"${iconset}/icon_${size}x${size}.png\""
-        system "${prefix}/bin/rsvg-convert -w ${double} -h ${double} \"${svg_icon}\" -o \"${iconset}/icon_${size}x${size}@2x.png\""
-    }
-    system "/usr/bin/iconutil -c icns \"${iconset}\" -o \"${resdir}/Ngraph-gtk.icns\""
-
-    # 3. Info.plist を作成（ドキュメントアイコンと UTI の定義を追加）
-    set plist "${appdir}/Contents/Info.plist"
-    set pfp [open $plist w]
-    puts $pfp {<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://apple.com">
+    set fp [open "${contents_dir}/Info.plist" w 0644]
+    puts $fp {<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleExecutable</key>
-    <string>Ngraph-gtk</string>
-    <key>CFBundleIconFile</key>
-    <string>Ngraph-gtk</string>
     <key>CFBundleIdentifier</key>
-    <string>org.macports.ngraph-gtk</string>
-    <key>CFBundleName</key>
-    <string>Ngraph-gtk</string>
+    <string>com.github.htrb.ngraph-gtk</string>
+    <key>CFBundleExecutable</key>
+    <string>Ngraph-GTK</string>
+    <key>CFBundleIconFile</key>
+    <string>Ngraph-GTK.icns</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
-            <key>CFBundleTypeExtensions</key>
-            <array>
-                <string>ngp</string>
-            </array>
-            <key>CFBundleTypeIconFile</key>
-            <string>Ngraph-gtk</string>
             <key>CFBundleTypeName</key>
             <string>Ngraph Document</string>
             <key>CFBundleTypeRole</key>
@@ -174,6 +93,12 @@ post-destroot {
             <array>
                 <string>org.macports.ngraph-gtk.ngp</string>
             </array>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+                <string>ngp</string>
+            </array>
+            <key>CFBundleTypeIconFile</key>
+            <string>Ngraph-GTK.icns</string>
         </dict>
     </array>
     <key>UTExportedTypeDeclarations</key>
@@ -187,7 +112,7 @@ post-destroot {
             <key>UTTypeDescription</key>
             <string>Ngraph Document</string>
             <key>UTTypeIconFile</key>
-            <string>Ngraph-gtk</string>
+            <string>Ngraph-GTK.icns</string>
             <key>UTTypeIdentifier</key>
             <string>org.macports.ngraph-gtk.ngp</string>
             <key>UTTypeTagSpecification</key>
@@ -201,6 +126,5 @@ post-destroot {
     </array>
 </dict>
 </plist>}
-    close $pfp
+    close $fp
 }
-
